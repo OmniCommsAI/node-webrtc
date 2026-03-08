@@ -22,6 +22,17 @@ jobs:
         with:
           node-version: 20
 
+      # libwebrtc compilation units can use 1-2GB RAM each.
+      # ubuntu-latest only has 7GB RAM, so add 10GB swap to prevent OOM.
+      - name: Add swap space
+        run: |
+          sudo fallocate -l 10G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          echo "Swap enabled:"
+          free -h
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
@@ -37,6 +48,7 @@ jobs:
       - name: Build
         env:
           TARGET_ARCH: x64
+          NINJA_JOBS: "2"
         run: npm run build
 
       - name: Copy to prebuilds
