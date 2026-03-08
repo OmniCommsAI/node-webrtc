@@ -37,7 +37,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build cmake pkg-config \
-            libglib2.0-dev libgtk-3-dev libpulse-dev libasound2-dev
+            libglib2.0-dev libgtk-3-dev libpulse-dev libasound2-dev \
+            llvm lld
 
       - name: Install npm dependencies
         run: npm install --ignore-scripts
