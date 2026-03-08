@@ -26,14 +26,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build cmake pkg-config \
-            libglib2.0-dev libgtk-3-dev libpulse-dev libasound2-dev \
-            clang-14 lld-14
+            libglib2.0-dev libgtk-3-dev libpulse-dev libasound2-dev
 
       - name: Install npm dependencies
         run: npm install --ignore-scripts
 
       - name: Create nix.gni
-        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\nclang_base_path="/usr/lib/llvm-14"\ntreat_warnings_as_errors=false\n' > nix.gni
+        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\ntreat_warnings_as_errors=false\n' > nix.gni
 
       - name: Build
         env:
