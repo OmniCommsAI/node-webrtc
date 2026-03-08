@@ -8,6 +8,7 @@ on:
       - 'src/**'
       - 'CMakeLists.txt'
       - 'scripts/**'
+      - '.github/workflows/**'
 
 jobs:
   build-linux-x64:
@@ -25,26 +26,23 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build cmake pkg-config \
-            libglib2.0-dev libgtk-3-dev libpulse-dev libasound2-dev
+            libglib2.0-dev libgtk-3-dev libpulse-dev libasound2-dev \
+            clang-14 lld-14
 
       - name: Install npm dependencies
         run: npm install --ignore-scripts
 
       - name: Create nix.gni
         run: |
-          cat > nix.gni <<EOF
+          cat > nix.gni <<'EOF'
           is_clang=true
           use_lld=false
           clang_use_chrome_plugins=false
-          clang_base_path="/usr"
+          clang_base_path="/usr/lib/llvm-14"
           treat_warnings_as_errors=false
           EOF
-
-      - name: Cache libwebrtc source
-        uses: actions/cache@v4
-        with:
-          path: build-linux-x64/external/libwebrtc/download
-          key: libwebrtc-m98-linux-x64
+          # Remove leading whitespace from heredoc
+          sed -i 's/^          //' nix.gni
 
       - name: Build
         env:
@@ -64,6 +62,6 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add prebuilds/linux-x64/wrtc.node
+          git add -f prebuilds/linux-x64/wrtc.node
           git diff --cached --quiet || git commit -m "build: update linux-x64 prebuild binary"
           git push
