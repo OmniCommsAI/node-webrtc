@@ -1,19 +1,21 @@
 {
-  "name": "@roamhq/wrtc",
-  "description": "Standards-compliant WebRTC implementation for Node",
+  "name": "@omnicommsai/wrtc",
+  "description": "Production-grade WebRTC implementation for Node with buffered audio pacing",
   "keywords": [
     "webrtc",
     "p2p",
-    "peer"
+    "peer",
+    "audio",
+    "ring-buffer"
   ],
-  "version": "0.9.1",
-  "author": "Alan K <ack@modeswitch.org> (http://blog.modeswitch.org)",
-  "homepage": "https://github.com/WonderInventions/node-webrtc",
-  "bugs": "https://github.com/WonderInventions/node-webrtc/issues",
+  "version": "0.10.0",
+  "author": "OmniCommsAI",
+  "homepage": "https://github.com/OmniCommsAI/node-webrtc",
+  "bugs": "https://github.com/OmniCommsAI/node-webrtc/issues",
   "license": "BSD-2-Clause",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/WonderInventions/node-webrtc.git"
+    "url": "git+ssh://git@github.com/OmniCommsAI/node-webrtc.git"
   },
   "main": "lib/index.js",
   "types": "types/index.d.ts",
@@ -25,11 +27,11 @@
     "types"
   ],
   "optionalDependencies": {
-    "@roamhq/wrtc-darwin-arm64": "0.9.1",
-    "@roamhq/wrtc-darwin-x64": "0.9.1",
-    "@roamhq/wrtc-linux-arm64": "0.9.1",
-    "@roamhq/wrtc-linux-x64": "0.9.1",
-    "@roamhq/wrtc-win32-x64": "0.9.1",
+    "@omnicommsai/wrtc-darwin-arm64": "0.10.0",
+    "@omnicommsai/wrtc-darwin-x64": "0.10.0",
+    "@omnicommsai/wrtc-linux-arm64": "0.10.0",
+    "@omnicommsai/wrtc-linux-x64": "0.10.0",
+    "@omnicommsai/wrtc-win32-x64": "0.10.0",
     "domexception": "^4.0.0"
   },
   "devDependencies": {

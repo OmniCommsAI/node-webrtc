@@ -26,7 +26,7 @@
 #include <webrtc/rtc_base/thread.h>
 
 #include "src/functional/maybe.hh"
-#include "src/webrtc/test_audio_device_module.hh"
+#include "src/webrtc/buffered_audio_device_module.hh"
 
 namespace node_webrtc {
 
@@ -77,8 +77,8 @@ PeerConnectionFactory::PeerConnectionFactory(const Napi::CallbackInfo &info)
                   return webrtc::AudioDeviceModule::Create(audioLayer, nullptr);
                 })
                 .Or([]() {
-                  return TestAudioDeviceModule::CreateTestAudioDeviceModule(
-                      TestAudioDeviceModule::CreateZeroCapturer(48000, 1),
+                  return BufferedAudioDeviceModule::Create(
+                      BufferedAudioDeviceModule::CreateZeroCapturer(48000, 1),
                       webrtc::TestAudioDeviceModule::CreateDiscardRenderer(
                           48000));
                 });

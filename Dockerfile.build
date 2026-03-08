@@ -1,0 +1,39 @@
+# Build wrtc.node for linux-arm64
+# Usage: docker build -f Dockerfile.build -t wrtc-builder . && docker cp $(docker create wrtc-builder):/app/build-linux-arm64/Release/wrtc.node ./prebuilds/linux-arm64/wrtc.node
+
+FROM node:20-bookworm AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git python3 ninja-build cmake pkg-config \
+    libglib2.0-dev libgtk-3-dev libpulse-dev libasound2-dev \
+    lsb-release sudo wget curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy source code
+COPY package.json package-lock.json* ./
+COPY CMakeLists.txt nix.gni ./
+COPY scripts/ scripts/
+COPY src/ src/
+COPY lib/ lib/
+COPY patches/ patches/
+COPY types/ types/
+COPY test/ test/
+
+# Install npm dependencies (cmake-js, node-addon-api)
+RUN npm install --ignore-scripts
+
+# Create nix.gni for linux build (system clang)
+RUN echo 'is_clang=true' > nix.gni && \
+    echo 'use_lld=false' >> nix.gni && \
+    echo 'clang_use_chrome_plugins=false' >> nix.gni && \
+    echo 'clang_base_path="/usr"' >> nix.gni && \
+    echo 'treat_warnings_as_errors=false' >> nix.gni
+
+# Build (this downloads libwebrtc M98 + compiles everything - takes a long time)
+ENV TARGET_ARCH=arm64
+RUN npm run build
+
+# Output: /app/build-linux-arm64/Release/wrtc.node

@@ -1,0 +1,12 @@
+--- a/third_party/crc32c/BUILD.gn
++++ b/third_party/crc32c/BUILD.gn
+@@ -121,6 +121,9 @@
+         "-Xclang",
+         "+crypto",
++        "-Xclang",
++        "-target-feature",
++        "-Xclang",
++        "+aes",
+       ]
+     } else {
+       cflags = [ "-march=armv8-a+crc+crypto" ]
