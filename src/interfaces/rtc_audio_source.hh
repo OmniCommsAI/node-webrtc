@@ -31,6 +31,10 @@
  *
  *       This is the same architecture used by LiveKit's audio pipeline: JS pushes
  *       freely, a native thread drains at real-time pace.
+ *
+ * LiveKit-style async APIs (captureFrame, waitForPlayout, clearQueue,
+ * queuedDurationMs) added to support backpressure-aware producers that need to
+ * know when the ring buffer has space or has fully drained.
  */
 #pragma once
 
@@ -57,6 +61,28 @@ class Event;
 }
 
 namespace node_webrtc {
+
+/**
+ * PendingCapture — a frame + deferred promise waiting for ring buffer space.
+ *
+ * What: When captureFrame() is called but the ring buffer is full, we store
+ *       the frame data and a ThreadSafeFunction that will resolve the JS
+ *       promise on the main thread once the drain thread makes space.
+ *
+ * Why:  The drain thread cannot touch JS objects directly (wrong thread).
+ *       ThreadSafeFunction is the NAPI mechanism for calling back to the JS
+ *       thread from a native thread. The drain thread calls the TSFN after
+ *       consuming a frame, which schedules resolution on the JS event loop.
+ */
+struct PendingCapture {
+  int16_t data[960]; // kMaxFrameSamples
+  size_t num_samples;
+  uint8_t bits_per_sample;
+  uint16_t sample_rate;
+  uint8_t channel_count;
+  uint16_t num_frames;
+  Napi::ThreadSafeFunction tsfn;
+};
 
 /**
  * RTCAudioTrackSource — local audio source with ring-buffered sink delivery.
@@ -105,6 +131,35 @@ public:
    */
   void PushData(RTCOnDataEventDict dict);
 
+  /**
+   * What: Try to push a frame into the ring buffer, returning true if it fit.
+   *
+   * Why:  Unlike PushData (fire-and-forget, drops on overflow), this variant
+   *       tells the caller whether the frame was actually written. Used by
+   *       CaptureFrame to decide whether to resolve the promise immediately
+   *       or enqueue a PendingCapture for later resolution by the drain thread.
+   */
+  bool TryPushData(RTCOnDataEventDict &dict);
+
+  /**
+   * What: Reset the ring buffer positions to zero, effectively clearing all
+   *       queued audio.
+   *
+   * Why:  Needed when the caller wants to discard stale audio (e.g. after an
+   *       interruption or when switching audio sources). Also resolves any
+   *       pending capture promises and the playout waiter, since the queue
+   *       is now empty.
+   */
+  void ClearBuffer();
+
+  /**
+   * What: Returns the number of unread frames in the ring buffer.
+   *
+   * Why:  Allows the NAPI wrapper to compute queuedDurationMs without knowing
+   *       the ring buffer internals.
+   */
+  size_t QueuedFrames() const;
+
   void AddSink(webrtc::AudioTrackSinkInterface *sink) override {
     std::unique_lock<std::shared_mutex> lock{_sinks_mutex};
     _sinks.push_back(sink);
@@ -118,6 +173,30 @@ public:
       _sinks.erase(it);
     }
   }
+
+  // ── Pending Capture / Playout Waiter State ──────────────────────────────
+  //
+  // What: State for the async captureFrame() and waitForPlayout() APIs.
+  //
+  // Why:  These APIs return JS Promises that resolve from the native drain
+  //       thread. The drain thread cannot touch V8 directly, so we use
+  //       ThreadSafeFunctions as the bridge. The mutex protects the pending
+  //       lists — it is held only briefly (push/pop), never during sleep.
+
+  /** Protects pending_capture_ and playout_tsfn_. */
+  std::mutex pending_mutex_;
+
+  /** Frames + promise callbacks waiting for ring buffer space. */
+  std::vector<PendingCapture> pending_capture_;
+
+  /**
+   * ThreadSafeFunction for the waitForPlayout() promise.
+   * Non-null only when someone is actively waiting.
+   */
+  Napi::ThreadSafeFunction playout_tsfn_;
+
+  /** Whether a waitForPlayout() call is outstanding. */
+  std::atomic<bool> waiting_for_playout_{false};
 
 private:
   PeerConnectionFactory *_factory = PeerConnectionFactory::GetOrCreateDefault();
@@ -153,7 +232,7 @@ private:
    *       kMaxFrameSamples array is large enough for any supported sample rate
    *       and channel count (up to 48kHz stereo).
    */
-  struct CaptureFrame {
+  struct RingFrame {
     int16_t data[kMaxFrameSamples];
     size_t num_samples = 0;
     uint8_t bits_per_sample = 16;
@@ -162,7 +241,7 @@ private:
     uint16_t num_frames = 480;
   };
 
-  CaptureFrame ring_buffer_[kRingCapacity];
+  RingFrame ring_buffer_[kRingCapacity];
 
   /** Producer position — only written by JS thread (PushData). */
   std::atomic<size_t> write_pos_{0};
@@ -183,6 +262,14 @@ private:
   void StartDrainThread();
 
   /**
+   * What: Ensure the drain thread is running, starting it if needed.
+   *
+   * Why:  Both PushData and TryPushData need to lazily start the drain thread.
+   *       Extracted to avoid duplicating the compare_exchange logic.
+   */
+  void EnsureDrainThread();
+
+  /**
    * What: Main drain loop — runs on a dedicated high-priority native thread.
    *       Reads one frame from the ring buffer every 10ms and delivers to all
    *       registered WebRTC audio sinks.
@@ -195,6 +282,12 @@ private:
    *       Uses absolute time tracking with drift compensation (same technique
    *       as ProcessAudio in BufferedAudioDeviceModule). If the thread falls
    *       behind by more than 50ms, it resets rather than bursting.
+   *
+   *       After consuming each frame, checks for:
+   *       1. Pending captureFrame() promises — pushes their frame data and
+   *          resolves the promise via ThreadSafeFunction.
+   *       2. waitForPlayout() — if the buffer is now empty and someone is
+   *          waiting, resolves the playout promise via ThreadSafeFunction.
    */
   void DrainLoop();
 
@@ -213,8 +306,61 @@ public:
 private:
   static Napi::FunctionReference &constructor();
 
+  // ── Existing APIs (backward-compatible) ─────────────────────────────────
+
   Napi::Value CreateTrack(const Napi::CallbackInfo &);
   Napi::Value OnData(const Napi::CallbackInfo &);
+
+  // ── LiveKit-style async APIs ────────────────────────────────────────────
+  //
+  // What: Backpressure-aware audio source APIs modeled after LiveKit's
+  //       AudioSource (captureFrame, clearQueue, queuedDurationMs, waitForPlayout).
+  //
+  // Why:  The original onData() is fire-and-forget — the caller has no way to
+  //       know if the ring buffer accepted the frame or if it's full. For TTS
+  //       playback, the caller needs:
+  //       - captureFrame(): know when the frame was accepted (backpressure)
+  //       - clearQueue(): discard stale audio on interruption
+  //       - queuedDurationMs: monitor buffer depth for pacing decisions
+  //       - waitForPlayout(): know when all queued audio has been delivered
+  //         (e.g. to detect end-of-utterance)
+
+  /**
+   * What: Push a frame and return a Promise that resolves when the frame is
+   *       accepted into the ring buffer.
+   *
+   * Why:  If the ring buffer has space, resolves immediately. If full, the
+   *       promise is held until the drain thread consumes a frame and makes
+   *       space, at which point the pending frame is pushed and the promise
+   *       resolved via ThreadSafeFunction.
+   */
+  Napi::Value CaptureFrame(const Napi::CallbackInfo &);
+
+  /**
+   * What: Synchronously clear all queued audio from the ring buffer.
+   *
+   * Why:  Used on interruption — discard stale TTS audio immediately so the
+   *       new response can start without waiting for old audio to drain.
+   *       Also resolves any pending captureFrame/waitForPlayout promises.
+   */
+  Napi::Value ClearQueue(const Napi::CallbackInfo &);
+
+  /**
+   * What: Getter that returns the duration of audio currently queued (ms).
+   *
+   * Why:  Allows the JS caller to make pacing decisions (e.g. "don't push
+   *       more frames if there's already 200ms queued").
+   */
+  Napi::Value GetQueuedDurationMs(const Napi::CallbackInfo &);
+
+  /**
+   * What: Return a Promise that resolves when the ring buffer drains to empty.
+   *
+   * Why:  The caller (TTS pipeline) needs to know when all audio has been
+   *       delivered to sinks — e.g. to detect end-of-utterance for turn-taking.
+   *       If the buffer is already empty, resolves immediately.
+   */
+  Napi::Value WaitForPlayout(const Napi::CallbackInfo &);
 
   rtc::scoped_refptr<RTCAudioTrackSource> _source;
   OwnedWrap<MediaStreamTrack> _track_wrap;

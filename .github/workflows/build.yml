@@ -72,4 +72,5 @@ jobs:
           git config user.email "actions@github.com"
           git add -f prebuilds/linux-x64/wrtc.node
           git diff --cached --quiet || git commit -m "build: update linux-x64 prebuild binary"
+          git pull --rebase origin develop
           git push
