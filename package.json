@@ -60,7 +60,7 @@
     "install-example": "node scripts/install-example.js",
     "lint": "eslint lib/*.js lib/**/*.js test/*.js test/**/*.js scripts/*.js",
     "test": "node --expose-gc test/all.js",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "lint-staged": {
     "*.js": "eslint --cache --fix",
