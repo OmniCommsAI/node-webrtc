@@ -33,16 +33,7 @@ jobs:
         run: npm install --ignore-scripts
 
       - name: Create nix.gni
-        run: |
-          cat > nix.gni <<'EOF'
-          is_clang=true
-          use_lld=false
-          clang_use_chrome_plugins=false
-          clang_base_path="/usr/lib/llvm-14"
-          treat_warnings_as_errors=false
-          EOF
-          # Remove leading whitespace from heredoc
-          sed -i 's/^          //' nix.gni
+        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\nclang_base_path="/usr/lib/llvm-14"\ntreat_warnings_as_errors=false\n' > nix.gni
 
       - name: Build
         env:
