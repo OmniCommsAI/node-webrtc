@@ -345,7 +345,7 @@ target_link_libraries(${MODULE} PRIVATE
 )
 
 target_compile_definitions(${MODULE} PRIVATE
-  -DNAPI_VERSION=3
+  -DNAPI_VERSION=4
   -DUSE_BUILTIN_SW_CODECS
 )
 
