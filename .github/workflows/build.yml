@@ -26,10 +26,10 @@ jobs:
       # ubuntu-latest only has 7GB RAM, so add 10GB swap to prevent OOM.
       - name: Add swap space
         run: |
-          sudo fallocate -l 10G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
+          sudo fallocate -l 10G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
           echo "Swap enabled:"
           free -h
 
