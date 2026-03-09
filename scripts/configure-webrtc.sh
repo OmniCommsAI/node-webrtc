@@ -29,6 +29,7 @@ esac
 # ARM64 gn if GN_ARM64_BIN is set (provided by CI workflow).
 if [ -n "$GN_ARM64_BIN" ] && [ -f "$GN_ARM64_BIN" ]; then
   echo "Replacing x64 gn with ARM64 binary from $GN_ARM64_BIN"
+  chmod u+w buildtools/linux64/gn
   cp "$GN_ARM64_BIN" buildtools/linux64/gn
   chmod +x buildtools/linux64/gn
 fi
