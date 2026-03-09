@@ -154,7 +154,10 @@ jobs:
 
   build-darwin-arm64:
 
-    runs-on: macos-latest
+    # Pin to macos-14 (Xcode 15.x). macos-latest resolves to macOS 15 with
+    # Xcode 16.4 whose SDK headers are incompatible with the bundled M98-era
+    # clang in libwebrtc (NSUInteger/NSInteger type errors).
+    runs-on: macos-14
     timeout-minutes: 180
 
     steps:
@@ -200,50 +203,9 @@ jobs:
           git pull --rebase origin develop
           git push
 
-  build-darwin-x64:
-
-    runs-on: macos-13
-    timeout-minutes: 180
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install build dependencies
-        run: brew install ninja cmake
-
-      - name: Install npm dependencies
-        run: npm install --ignore-scripts
-
-      - name: Create nix.gni
-        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\ntreat_warnings_as_errors=false\n' > nix.gni
-
-      - name: Build
-        env:
-          TARGET_ARCH: x64
-          NINJA_JOBS: "3"
-        run: npm run build
-
-      - name: Copy to prebuilds
-        run: cp build-darwin-x64/Release/wrtc.node prebuilds/darwin-x64/wrtc.node
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: wrtc-darwin-x64
-          path: prebuilds/darwin-x64/wrtc.node
-
-      - name: Commit prebuild
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add -f prebuilds/darwin-x64/wrtc.node
-          git diff --cached --quiet || git commit -m "build: update darwin-x64 prebuild binary"
-          git pull --rebase origin develop
-          git push
+  # darwin-x64 build disabled: GitHub removed all macos-13 runners (Intel)
+  # and no x64 macOS runners are available. Intel Macs are phasing out.
+  # Re-enable if GitHub adds x64 macOS runners or cross-compilation is set up.
 
   build-win32-x64:
 

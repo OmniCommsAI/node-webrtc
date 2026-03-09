@@ -221,10 +221,12 @@ private:
   /** Maximum samples in a single 10ms frame: 48kHz * 2ch * 10ms = 960 */
   static constexpr size_t kMaxFrameSamples = 960;
 
-  /** Ring buffer capacity: 50 frames = 500ms of audio absorption.
-   *  Why 50: Absorbs typical JS timer jitter (0-50ms) plus occasional GC pauses
-   *  (100-200ms). Low enough that latency stays acceptable for interactive voice. */
-  static constexpr size_t kRingCapacity = 50;
+  /** Ring buffer capacity: 100 frames = 1000ms of audio absorption.
+   *  Why 100: Matches LiveKit's default queue_size_ms=1000. Absorbs JS event loop
+   *  jitter (0-50ms), GC pauses (100-200ms), and bursty TTS frame delivery.
+   *  The drain thread still delivers at a steady 10ms cadence — buffer depth
+   *  doesn't add latency under normal conditions, only absorbs bursts. */
+  static constexpr size_t kRingCapacity = 100;
 
   /**
    * What: Pre-allocated audio frame slot in the ring buffer.
