@@ -100,7 +100,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build cmake pkg-config \
             libglib2.0-dev libgtk-3-dev libpulse-dev libasound2-dev \
-            llvm lld clang
+            llvm lld clang-15
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-15 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-15 100
 
       # depot_tools and the libwebrtc source tree bundle x64-only `gn` binaries
       # at buildtools/linux64/gn. On ARM64 runners these cause "Exec format error".
@@ -122,7 +124,7 @@ jobs:
       # extra_cflags suppresses narrowing warnings that the newer system clang
       # (v18+) treats as errors but the bundled M98-era clang ignores.
       - name: Create nix.gni
-        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\ntreat_warnings_as_errors=false\nclang_base_path="/usr"\nextra_cflags="-Wno-c++11-narrowing -Wno-narrowing"\n' > nix.gni
+        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\ntreat_warnings_as_errors=false\nclang_base_path="/usr"\n' > nix.gni
 
       - name: Build
         env:
