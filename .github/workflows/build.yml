@@ -15,7 +15,6 @@ permissions:
 
 jobs:
   build-linux-x64:
-    if: false  # Temporarily disabled while debugging ARM64 build
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
