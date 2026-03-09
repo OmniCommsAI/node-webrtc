@@ -174,10 +174,22 @@ jobs:
       - name: Install npm dependencies
         run: npm install --ignore-scripts
 
+      # Detect the Xcode system clang base path. The bundled M98-era clang
+      # can't compile against modern macOS SDK headers (noErr undeclared,
+      # NSUInteger unknown type). Using system Apple clang avoids this,
+      # analogous to how linux-arm64 uses clang_base_path="/usr/lib/llvm-15".
+      - name: Detect system clang path
+        run: |
+          CLANG_BASE_PATH=$(dirname $(dirname $(xcrun --find clang)))
+          echo "CLANG_BASE_PATH=$CLANG_BASE_PATH" >> $GITHUB_ENV
+          echo "Using system clang at: $CLANG_BASE_PATH"
+
       # macOS uses Apple clang which is already is_clang=true compatible.
-      # use_custom_libcxx=true is set by CMakeLists.txt for non-Windows.
+      # clang_base_path tells GN to use system clang instead of the bundled
+      # x64 clang at third_party/llvm-build/ which is incompatible with
+      # modern macOS SDK headers.
       - name: Create nix.gni
-        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\ntreat_warnings_as_errors=false\n' > nix.gni
+        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\ntreat_warnings_as_errors=false\nclang_base_path="%s"\n' "$CLANG_BASE_PATH" > nix.gni
 
       - name: Build
         env:
