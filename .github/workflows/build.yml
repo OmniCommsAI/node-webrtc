@@ -119,8 +119,10 @@ jobs:
 
       # clang_base_path tells GN to use system clang instead of the bundled
       # x64 clang at third_party/llvm-build/ which can't run on ARM64.
+      # extra_cflags suppresses narrowing warnings that the newer system clang
+      # (v18+) treats as errors but the bundled M98-era clang ignores.
       - name: Create nix.gni
-        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\ntreat_warnings_as_errors=false\nclang_base_path="/usr"\n' > nix.gni
+        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\ntreat_warnings_as_errors=false\nclang_base_path="/usr"\nextra_cflags="-Wno-c++11-narrowing -Wno-narrowing"\n' > nix.gni
 
       - name: Build
         env:
