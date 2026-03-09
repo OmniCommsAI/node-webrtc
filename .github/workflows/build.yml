@@ -74,3 +74,62 @@ jobs:
           git diff --cached --quiet || git commit -m "build: update linux-x64 prebuild binary"
           git pull --rebase origin develop
           git push
+
+  build-linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Add swap space
+        run: |
+          sudo fallocate -l 10G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          echo "Swap enabled:"
+          free -h
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake pkg-config \
+            libglib2.0-dev libgtk-3-dev libpulse-dev libasound2-dev \
+            llvm lld clang
+
+      - name: Install npm dependencies
+        run: npm install --ignore-scripts
+
+      - name: Create nix.gni
+        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\ntreat_warnings_as_errors=false\n' > nix.gni
+
+      - name: Build
+        env:
+          TARGET_ARCH: arm64
+          NINJA_JOBS: "2"
+          CC: clang
+          CXX: clang++
+        run: npm run build
+
+      - name: Copy to prebuilds
+        run: cp build-linux-arm64/Release/wrtc.node prebuilds/linux-arm64/wrtc.node
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wrtc-linux-arm64
+          path: prebuilds/linux-arm64/wrtc.node
+
+      - name: Commit prebuild
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add -f prebuilds/linux-arm64/wrtc.node
+          git diff --cached --quiet || git commit -m "build: update linux-arm64 prebuild binary"
+          git pull --rebase origin develop
+          git push
