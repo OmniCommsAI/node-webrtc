@@ -102,16 +102,17 @@ jobs:
             libglib2.0-dev libgtk-3-dev libpulse-dev libasound2-dev \
             llvm lld clang
 
-      # depot_tools bundles an x64-only `gn` binary (buildtools/linux64/gn).
-      # On ARM64 runners this causes "Exec format error". Install a native
-      # ARM64 gn binary from Chromium's CI and put it ahead of depot_tools on PATH.
+      # depot_tools and the libwebrtc source tree bundle x64-only `gn` binaries
+      # at buildtools/linux64/gn. On ARM64 runners these cause "Exec format error".
+      # We download a native ARM64 gn and replace the x64 binaries in-place after
+      # the CMake download step extracts them. We also put it on PATH so
+      # configure-webrtc.sh's `gn gen` call finds it.
       - name: Install native ARM64 gn binary
         run: |
-          mkdir -p $HOME/gn-arm64
+          mkdir -p ${{ github.workspace }}/gn-arm64
           curl -sL "https://chrome-infra-packages.appspot.com/dl/gn/gn/linux-arm64/+/latest" -o /tmp/gn.zip
-          unzip -o /tmp/gn.zip -d $HOME/gn-arm64
-          chmod +x $HOME/gn-arm64/gn
-          echo "$HOME/gn-arm64" >> $GITHUB_PATH
+          unzip -o /tmp/gn.zip -d ${{ github.workspace }}/gn-arm64
+          chmod +x ${{ github.workspace }}/gn-arm64/gn
 
       - name: Install npm dependencies
         run: npm install --ignore-scripts
@@ -125,6 +126,7 @@ jobs:
           NINJA_JOBS: "2"
           CC: clang
           CXX: clang++
+          GN_ARM64_BIN: ${{ github.workspace }}/gn-arm64/gn
         run: npm run build
 
       - name: Copy to prebuilds
