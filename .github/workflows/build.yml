@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   build-linux-x64:
+    if: false  # Disabled until linux-arm64 is stable
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -121,8 +122,6 @@ jobs:
 
       # clang_base_path tells GN to use system clang instead of the bundled
       # x64 clang at third_party/llvm-build/ which can't run on ARM64.
-      # extra_cflags suppresses narrowing warnings that the newer system clang
-      # (v18+) treats as errors but the bundled M98-era clang ignores.
       - name: Create nix.gni
         run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\ntreat_warnings_as_errors=false\nclang_base_path="/usr/lib/llvm-15"\n' > nix.gni
 
@@ -150,5 +149,157 @@ jobs:
           git config user.email "actions@github.com"
           git add -f prebuilds/linux-arm64/wrtc.node
           git diff --cached --quiet || git commit -m "build: update linux-arm64 prebuild binary"
+          git pull --rebase origin develop
+          git push
+
+  build-darwin-arm64:
+    if: false  # Disabled until linux-arm64 is stable
+    runs-on: macos-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # macOS runners have 14GB RAM — no swap needed.
+      - name: Install build dependencies
+        run: brew install ninja cmake
+
+      - name: Install npm dependencies
+        run: npm install --ignore-scripts
+
+      # macOS uses Apple clang which is already is_clang=true compatible.
+      # use_custom_libcxx=true is set by CMakeLists.txt for non-Windows.
+      - name: Create nix.gni
+        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\ntreat_warnings_as_errors=false\n' > nix.gni
+
+      - name: Build
+        env:
+          TARGET_ARCH: arm64
+          NINJA_JOBS: "3"
+        run: npm run build
+
+      - name: Copy to prebuilds
+        run: cp build-darwin-arm64/Release/wrtc.node prebuilds/darwin-arm64/wrtc.node
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wrtc-darwin-arm64
+          path: prebuilds/darwin-arm64/wrtc.node
+
+      - name: Commit prebuild
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add -f prebuilds/darwin-arm64/wrtc.node
+          git diff --cached --quiet || git commit -m "build: update darwin-arm64 prebuild binary"
+          git pull --rebase origin develop
+          git push
+
+  build-darwin-x64:
+    if: false  # Disabled until linux-arm64 is stable
+    runs-on: macos-13
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install build dependencies
+        run: brew install ninja cmake
+
+      - name: Install npm dependencies
+        run: npm install --ignore-scripts
+
+      - name: Create nix.gni
+        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\ntreat_warnings_as_errors=false\n' > nix.gni
+
+      - name: Build
+        env:
+          TARGET_ARCH: x64
+          NINJA_JOBS: "3"
+        run: npm run build
+
+      - name: Copy to prebuilds
+        run: cp build-darwin-x64/Release/wrtc.node prebuilds/darwin-x64/wrtc.node
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wrtc-darwin-x64
+          path: prebuilds/darwin-x64/wrtc.node
+
+      - name: Commit prebuild
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add -f prebuilds/darwin-x64/wrtc.node
+          git diff --cached --quiet || git commit -m "build: update darwin-x64 prebuild binary"
+          git pull --rebase origin develop
+          git push
+
+  build-win32-x64:
+    if: false  # Disabled until linux-arm64 is stable
+    runs-on: windows-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Windows runners come with MSVC pre-installed.
+      # depot_tools' vs_toolchain.py finds it via DEPOT_TOOLS_WIN_TOOLCHAIN=0.
+      - name: Install build dependencies
+        run: choco install ninja cmake --no-progress -y
+
+      - name: Install npm dependencies
+        run: npm install --ignore-scripts
+
+      # Windows uses MSVC, not clang from GN's perspective for linking.
+      # is_clang=true tells GN to download and use its own clang-cl for compilation
+      # while still using MSVC linker. treat_warnings_as_errors=false prevents
+      # M98-era code from failing with newer toolchains.
+      - name: Create nix.gni
+        run: |
+          @"
+          is_clang=true
+          use_lld=false
+          clang_use_chrome_plugins=false
+          treat_warnings_as_errors=false
+          "@ | Out-File -FilePath nix.gni -Encoding utf8NoBOM
+
+      - name: Build
+        env:
+          TARGET_ARCH: x64
+          NINJA_JOBS: "2"
+          DEPOT_TOOLS_WIN_TOOLCHAIN: "0"
+        run: npm run build
+
+      - name: Copy to prebuilds
+        run: Copy-Item build-win32-x64\Release\wrtc.node prebuilds\win32-x64\wrtc.node
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wrtc-win32-x64
+          path: prebuilds/win32-x64/wrtc.node
+
+      - name: Commit prebuild
+        shell: bash
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add -f prebuilds/win32-x64/wrtc.node
+          git diff --cached --quiet || git commit -m "build: update win32-x64 prebuild binary"
           git pull --rebase origin develop
           git push
