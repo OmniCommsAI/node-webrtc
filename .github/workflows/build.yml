@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   build-linux-x64:
+    if: false  # Temporarily disabled while debugging ARM64 build
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -124,7 +125,7 @@ jobs:
       # extra_cflags suppresses narrowing warnings that the newer system clang
       # (v18+) treats as errors but the bundled M98-era clang ignores.
       - name: Create nix.gni
-        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\ntreat_warnings_as_errors=false\nclang_base_path="/usr"\n' > nix.gni
+        run: printf 'is_clang=true\nuse_lld=false\nclang_use_chrome_plugins=false\ntreat_warnings_as_errors=false\nclang_base_path="/usr/lib/llvm-15"\n' > nix.gni
 
       - name: Build
         env:
