@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build-linux-x64:
-    if: false  # Disabled until linux-arm64 is stable
+
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -153,7 +153,7 @@ jobs:
           git push
 
   build-darwin-arm64:
-    if: false  # Disabled until linux-arm64 is stable
+
     runs-on: macos-latest
     timeout-minutes: 180
 
@@ -201,7 +201,7 @@ jobs:
           git push
 
   build-darwin-x64:
-    if: false  # Disabled until linux-arm64 is stable
+
     runs-on: macos-13
     timeout-minutes: 180
 
@@ -246,7 +246,7 @@ jobs:
           git push
 
   build-win32-x64:
-    if: false  # Disabled until linux-arm64 is stable
+
     runs-on: windows-latest
     timeout-minutes: 180
 
