@@ -252,11 +252,46 @@ jobs:
           treat_warnings_as_errors=false
           "@ | Out-File -FilePath nix.gni -Encoding utf8NoBOM
 
+      # The M98-era vs_toolchain.py only supports VS 2017/2019 but GitHub
+      # runners have VS 2022. We run cmake configure first (downloads WebRTC
+      # source), then patch vs_toolchain.py to add VS 2022 support before the
+      # actual gn gen/ninja build runs. The patch adds '17.0' (2022) to the
+      # supported versions list and maps it to the correct install path.
+      - name: Download WebRTC source (configure only)
+        env:
+          TARGET_ARCH: x64
+          NINJA_JOBS: "2"
+          DEPOT_TOOLS_WIN_TOOLCHAIN: "0"
+        shell: bash
+        run: |
+          # Run cmake configure to trigger depot_tools + WebRTC source download.
+          # This will fail at gn gen (vs_toolchain), but the source is downloaded.
+          npx cmake-js configure --CDTARGET_ARCH=x64 || true
+
+      - name: Patch vs_toolchain.py for VS 2022
+        shell: pwsh
+        run: |
+          $vsToolchain = Get-ChildItem -Recurse -Filter "vs_toolchain.py" -Path "build-win32-x64" | Select-Object -First 1
+          if (-not $vsToolchain) {
+            Write-Error "vs_toolchain.py not found"
+            exit 1
+          }
+          Write-Host "Patching $($vsToolchain.FullName)"
+          $content = Get-Content $vsToolchain.FullName -Raw
+
+          # Add VS 2022 (17.0) to the supported versions list.
+          # Original: MSVS_VERSIONS = collections.OrderedDict([('16.0','2019'),('15.0','2017')])
+          $content = $content -replace "collections\.OrderedDict\(\[\('16\.0',\s*'2019'\)", "collections.OrderedDict([('17.0', '2022'), ('16.0', '2019')"
+
+          Set-Content $vsToolchain.FullName -Value $content -NoNewline
+          Write-Host "Patched vs_toolchain.py to support VS 2022"
+
       - name: Build
         env:
           TARGET_ARCH: x64
           NINJA_JOBS: "2"
           DEPOT_TOOLS_WIN_TOOLCHAIN: "0"
+          GYP_MSVS_VERSION: "2022"
         run: npm run build
 
       - name: Copy to prebuilds
