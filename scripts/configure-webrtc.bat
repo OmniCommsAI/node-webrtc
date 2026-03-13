@@ -23,6 +23,21 @@ ECHO Writing args.gn via PowerShell to preserve inner quotes
 powershell -NoProfile -Command "[System.IO.File]::WriteAllText('%BINARY_DIR%\args.gn', $env:GN_GEN_ARGS.Replace(' ', \"`n\"))"
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
+REM Patch vs_toolchain.py to support VS 2022 (17.0).
+REM The M98-era WebRTC source only knows VS 2017/2019 but GitHub runners
+REM now ship VS 2022 exclusively. We inject ('17.0','2022') into the
+REM supported versions OrderedDict before gn gen calls vs_toolchain.py.
+ECHO Patching vs_toolchain.py to support VS 2022
+powershell -NoProfile -Command ^
+  "$f = Join-Path $env:SOURCE_DIR 'build\vs_toolchain.py'; " ^
+  "$c = [IO.File]::ReadAllText($f); " ^
+  "if ($c -notmatch '17\.0') { " ^
+  "  $c = $c -replace \"collections\.OrderedDict\(\[\('16\.0',\s*'2019'\)\", \"collections.OrderedDict([('17.0', '2022'), ('16.0', '2019')\"; " ^
+  "  [IO.File]::WriteAllText($f, $c); " ^
+  "  Write-Host 'Patched: added VS 2022 support'; " ^
+  "} else { Write-Host 'Already patched' }"
+IF %ERRORLEVEL% NEQ 0 GOTO ERROR
+
 ECHO gn gen BINARY_DIR (reading args from args.gn)
 CALL gn gen %BINARY_DIR%
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
