@@ -59,7 +59,30 @@ powershell -NoProfile -Command ^
   "$lines | ForEach-Object { Write-Host $_.Trim() }"
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
+REM Detect latest Windows SDK that has user32.lib (um libs).
+REM The M98-era code detects SDK 10.0.19041.0 but the runner may only have
+REM a newer SDK with the um libs. We find the correct version and append
+REM windows_sdk_version to args.gn so GN uses the right SDK paths.
+ECHO Detecting Windows SDK version with um libs
+SET WIN_SDK_VER=
+FOR /F "tokens=*" %%d IN ('dir /b /ad /o-n "%ProgramFiles(x86)%\Windows Kits\10\lib" 2^>nul') DO (
+  IF NOT DEFINED WIN_SDK_VER (
+    IF EXIST "%ProgramFiles(x86)%\Windows Kits\10\lib\%%d\um\x86\user32.lib" (
+      SET WIN_SDK_VER=%%d
+    )
+  )
+)
+IF DEFINED WIN_SDK_VER (
+  ECHO Using Windows SDK: %WIN_SDK_VER%
+  powershell -NoProfile -Command "[IO.File]::AppendAllText('%BINARY_DIR%\args.gn', \"`nwindows_sdk_version=`\"%WIN_SDK_VER%`\"`n\")"
+) ELSE (
+  ECHO WARNING: Could not find Windows SDK with user32.lib
+)
+
 ECHO gn gen BINARY_DIR (reading args from args.gn)
+ECHO --- args.gn contents ---
+type %BINARY_DIR%\args.gn
+ECHO --- end args.gn ---
 CALL gn gen %BINARY_DIR%
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
