@@ -59,6 +59,40 @@ powershell -NoProfile -Command ^
   "$lines | ForEach-Object { Write-Host $_.Trim() }"
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
+REM Detect the correct Windows SDK version (the one with user32.lib).
+REM Then find and replace the hardcoded M98-era SDK version (10.0.19041.0)
+REM across ALL build config files (.py, .gn, .gni). The M98 source hardcodes
+REM this version in multiple places and the "update toolchain" CMake step
+REM already ran vs_toolchain.py (before our patches) writing stale env files.
+REM We also delete cached environment files to force regeneration.
+ECHO Detecting Windows SDK and replacing hardcoded version in build files
+powershell -NoProfile -Command ^
+  "$sdkDir = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\lib'; " ^
+  "$sdkVer = Get-ChildItem $sdkDir -Directory | Sort-Object Name -Descending | Where-Object { Test-Path (Join-Path $_.FullName 'um\x86\user32.lib') } | Select-Object -First 1 -ExpandProperty Name; " ^
+  "if (-not $sdkVer) { Write-Host 'ERROR: No Windows SDK with user32.lib'; exit 1 }; " ^
+  "Write-Host \"SDK with user32.lib: $sdkVer\"; " ^
+  "$buildDir = Join-Path $env:SOURCE_DIR 'build'; " ^
+  "Write-Host '--- Files containing 10.0.19041 ---'; " ^
+  "Get-ChildItem $buildDir -Recurse -Include '*.py','*.gn','*.gni' -ErrorAction SilentlyContinue | Select-String '10\.0\.19041' | ForEach-Object { Write-Host \"$($_.RelativePath):$($_.LineNumber): $($_.Line.Trim())\" }; " ^
+  "Write-Host '--- Replacing 10.0.19041.0 with $sdkVer ---'; " ^
+  "$count = 0; " ^
+  "Get-ChildItem $buildDir -Recurse -Include '*.py','*.gn','*.gni' -ErrorAction SilentlyContinue | ForEach-Object { " ^
+  "  $content = [IO.File]::ReadAllText($_.FullName); " ^
+  "  if ($content -match '10\.0\.19041\.0') { " ^
+  "    $content = $content -replace '10\.0\.19041\.0', $sdkVer; " ^
+  "    [IO.File]::WriteAllText($_.FullName, $content); " ^
+  "    Write-Host \"Patched: $($_.FullName)\"; " ^
+  "    $count++; " ^
+  "  } " ^
+  "}; " ^
+  "Write-Host \"Patched $count files\"; " ^
+  "Write-Host '--- Deleting cached environment files ---'; " ^
+  "Get-ChildItem $buildDir -Recurse -Filter 'environment.*' -ErrorAction SilentlyContinue | ForEach-Object { " ^
+  "  Write-Host \"Deleting: $($_.FullName)\"; " ^
+  "  Remove-Item $_.FullName -Force; " ^
+  "}"
+IF %ERRORLEVEL% NEQ 0 GOTO ERROR
+
 ECHO gn gen BINARY_DIR (reading args from args.gn)
 CALL gn gen %BINARY_DIR%
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
