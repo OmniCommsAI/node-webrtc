@@ -59,39 +59,30 @@ powershell -NoProfile -Command ^
   "$lines | ForEach-Object { Write-Host $_.Trim() }"
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
-REM Detect latest Windows SDK that has user32.lib (um libs).
-REM The M98-era vs_toolchain.py hardcodes SDK 10.0.19041.0 but the runner
-REM may only have a newer SDK with the um libs. Three fixes:
-REM 1. Set WindowsSDKVersion env var (vcvarsall.bat reads this)
-REM 2. Replace hardcoded 10.0.19041.0 in vs_toolchain.py
-REM 3. Append windows_sdk_version to args.gn
-ECHO Detecting Windows SDK version with um libs
-SET WIN_SDK_VER=
-FOR /F "tokens=*" %%d IN ('dir /b /ad /o-n "%ProgramFiles(x86)%\Windows Kits\10\lib" 2^>nul') DO (
-  IF NOT DEFINED WIN_SDK_VER (
-    IF EXIST "%ProgramFiles(x86)%\Windows Kits\10\lib\%%d\um\x86\user32.lib" (
-      SET WIN_SDK_VER=%%d
-    )
-  )
-)
+REM Detect latest Windows SDK with user32.lib. Use PowerShell for detection
+REM to avoid cmd.exe parenthesis parsing issues with %ProgramFiles(x86)%.
+ECHO Detecting Windows SDK version
+FOR /F "tokens=*" %%v IN ('powershell -NoProfile -Command "$d = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\lib'; Get-ChildItem $d -Directory | Sort-Object Name -Descending | Where-Object { Test-Path (Join-Path $_.FullName 'um\x86\user32.lib') } | Select-Object -First 1 -ExpandProperty Name"') DO SET WIN_SDK_VER=%%v
 IF DEFINED WIN_SDK_VER (
   ECHO Using Windows SDK: %WIN_SDK_VER%
-  REM Set env var for vcvarsall.bat (trailing backslash required)
-  SET WindowsSDKVersion=%WIN_SDK_VER%\
-  SET WINDOWSSDKDIR=%ProgramFiles(x86)%\Windows Kits\10\
-  REM Replace hardcoded SDK version in vs_toolchain.py and setup_toolchain.py
-  powershell -NoProfile -Command ^
-    "$vst = Join-Path $env:SOURCE_DIR 'build\vs_toolchain.py'; " ^
-    "$c = [IO.File]::ReadAllText($vst); " ^
-    "if ($c -match '10\.0\.19041\.0') { " ^
-    "  $c = $c -replace '10\.0\.19041\.0', '%WIN_SDK_VER%'; " ^
-    "  [IO.File]::WriteAllText($vst, $c); " ^
-    "  Write-Host 'Replaced SDK 10.0.19041.0 -> %WIN_SDK_VER% in vs_toolchain.py'; " ^
-    "} else { Write-Host 'No hardcoded SDK version found in vs_toolchain.py' }; " ^
-    "[IO.File]::AppendAllText('%BINARY_DIR%\args.gn', \"`nwindows_sdk_version=`\"%WIN_SDK_VER%`\"`n\")"
 ) ELSE (
-  ECHO WARNING: Could not find Windows SDK with user32.lib
+  ECHO WARNING: No Windows SDK with user32.lib found
 )
+
+REM Set WindowsSDKVersion env var for vcvarsall.bat (trailing backslash required).
+REM Replace hardcoded SDK 10.0.19041.0 in vs_toolchain.py.
+REM Append windows_sdk_version to args.gn.
+IF DEFINED WIN_SDK_VER SET WindowsSDKVersion=%WIN_SDK_VER%\
+IF DEFINED WIN_SDK_VER powershell -NoProfile -Command ^
+  "$vst = Join-Path $env:SOURCE_DIR 'build\vs_toolchain.py'; " ^
+  "$c = [IO.File]::ReadAllText($vst); " ^
+  "if ($c -match '10\.0\.19041\.0') { " ^
+  "  $c = $c -replace '10\.0\.19041\.0', '%WIN_SDK_VER%'; " ^
+  "  [IO.File]::WriteAllText($vst, $c); " ^
+  "  Write-Host 'Replaced SDK 10.0.19041.0 -> %WIN_SDK_VER% in vs_toolchain.py'; " ^
+  "} else { Write-Host 'No hardcoded 10.0.19041.0 in vs_toolchain.py' }; " ^
+  "[IO.File]::AppendAllText($env:BINARY_DIR + '\args.gn', \"`nwindows_sdk_version=`\"%WIN_SDK_VER%`\"`n\")"
+IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
 ECHO gn gen BINARY_DIR (reading args from args.gn)
 CALL gn gen %BINARY_DIR%
