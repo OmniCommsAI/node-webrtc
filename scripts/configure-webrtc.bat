@@ -32,13 +32,13 @@ ECHO Patching vs_toolchain.py to support VS 2022
 powershell -NoProfile -Command ^
   "$f = Join-Path $env:SOURCE_DIR 'build\vs_toolchain.py'; " ^
   "$c = [IO.File]::ReadAllText($f); " ^
-  "if ($c -notmatch [regex]::Escape(\"('17.0', '2022')\")) { " ^
-  "  $old = [regex]::Escape(\"('16.0', '2019'),\"); " ^
-  "  $new = \"('17.0', '2022'),`n    ('16.0', '2019'),\"; " ^
+  "if ($c -notmatch [regex]::Escape(\"('2022', '17.0')\")) { " ^
+  "  $old = [regex]::Escape(\"('2019', '16.0'),\"); " ^
+  "  $new = \"('2022', '17.0'),`n    ('2019', '16.0'),\"; " ^
   "  $c = $c -replace $old, $new; " ^
   "  [IO.File]::WriteAllText($f, $c); " ^
   "  Write-Host 'Patched: added VS 2022 support'; " ^
-  "  $lines = [IO.File]::ReadAllLines($f) | Where-Object { $_ -match 'MSVS_VERSIONS|17\.0|16\.0|15\.0' }; " ^
+  "  $lines = [IO.File]::ReadAllLines($f) | Where-Object { $_ -match 'MSVS_VERSIONS|2022|2019|2017' }; " ^
   "  $lines | ForEach-Object { Write-Host $_.Trim() }; " ^
   "} else { Write-Host 'Already patched' }"
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
