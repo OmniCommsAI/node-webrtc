@@ -25,16 +25,21 @@ IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
 REM Patch vs_toolchain.py to support VS 2022 (17.0).
 REM The M98-era WebRTC source only knows VS 2017/2019 but GitHub runners
-REM now ship VS 2022 exclusively. We inject ('17.0','2022') into the
-REM supported versions OrderedDict before gn gen calls vs_toolchain.py.
+REM now ship VS 2022 exclusively. We inject ('17.0','2022') before the
+REM ('16.0','2019') tuple. The OrderedDict is multiline so we target the
+REM tuple itself, not the OrderedDict constructor call.
 ECHO Patching vs_toolchain.py to support VS 2022
 powershell -NoProfile -Command ^
   "$f = Join-Path $env:SOURCE_DIR 'build\vs_toolchain.py'; " ^
   "$c = [IO.File]::ReadAllText($f); " ^
-  "if ($c -notmatch '17\.0') { " ^
-  "  $c = $c -replace \"collections\.OrderedDict\(\[\('16\.0',\s*'2019'\)\", \"collections.OrderedDict([('17.0', '2022'), ('16.0', '2019')\"; " ^
+  "if ($c -notmatch [regex]::Escape(\"('17.0', '2022')\")) { " ^
+  "  $old = [regex]::Escape(\"('16.0', '2019'),\"); " ^
+  "  $new = \"('17.0', '2022'),`n    ('16.0', '2019'),\"; " ^
+  "  $c = $c -replace $old, $new; " ^
   "  [IO.File]::WriteAllText($f, $c); " ^
   "  Write-Host 'Patched: added VS 2022 support'; " ^
+  "  $lines = [IO.File]::ReadAllLines($f) | Where-Object { $_ -match 'MSVS_VERSIONS|17\.0|16\.0|15\.0' }; " ^
+  "  $lines | ForEach-Object { Write-Host $_.Trim() }; " ^
   "} else { Write-Host 'Already patched' }"
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
