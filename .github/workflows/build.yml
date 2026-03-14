@@ -240,6 +240,33 @@ jobs:
       - name: Install npm dependencies
         run: npm install --ignore-scripts
 
+      # The Windows registry ProductVersion for the SDK points to 10.0.19041
+      # (the OS-bundled SDK) but only 10.0.26100.0 (installed by VS 2022) has
+      # the full um libs (user32.lib). vs_toolchain.py reads the registry at
+      # runtime to get the SDK version and passes it to vcvarsall.bat, which
+      # sets LIB paths. Fix: update the registry to point to the SDK that
+      # actually has the um libs.
+      - name: Fix Windows SDK registry version
+        run: |
+          $sdkDir = "${env:ProgramFiles(x86)}\Windows Kits\10\lib"
+          $sdkVer = Get-ChildItem $sdkDir -Directory |
+            Where-Object { Test-Path "$($_.FullName)\um\x86\user32.lib" } |
+            Sort-Object Name -Descending |
+            Select-Object -First 1 -ExpandProperty Name
+          # Registry stores version without trailing .0 (e.g., 10.0.26100)
+          $regVer = $sdkVer -replace '\.0$', ''
+          $paths = @(
+            'HKLM:\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v10.0',
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\Windows\v10.0'
+          )
+          foreach ($p in $paths) {
+            if (Test-Path $p) {
+              $old = (Get-ItemProperty $p).ProductVersion
+              Set-ItemProperty -Path $p -Name 'ProductVersion' -Value $regVer
+              Write-Host "Updated $p ProductVersion: $old -> $regVer"
+            }
+          }
+
       # Windows uses MSVC, not clang from GN's perspective for linking.
       # is_clang=true tells GN to download and use its own clang-cl for compilation
       # while still using MSVC linker. treat_warnings_as_errors=false prevents
