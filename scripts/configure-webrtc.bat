@@ -99,16 +99,7 @@ REM it in certain scopes. GN treats unused assignments as hard errors.
 REM Fix: insert not_needed(["sys_lib_flags"]) after the assignment so GN knows
 REM the variable is intentionally set but not always consumed.
 ECHO Patching BUILD.gn to suppress unused sys_lib_flags error
-powershell -NoProfile -Command ^
-  "$f = Join-Path $env:SOURCE_DIR 'build\toolchain\win\BUILD.gn'; " ^
-  "if (Test-Path $f) { " ^
-  "  $c = [IO.File]::ReadAllText($f); " ^
-  "  if ($c -match 'sys_lib_flags' -and $c -notmatch 'not_needed.*sys_lib_flags') { " ^
-  "    $c = $c -replace '(sys_lib_flags\s*=\s*\"[^\"]*\"\s*\r?\n)', ('$1    not_needed([\"sys_lib_flags\"])' + \"`n\"); " ^
-  "    [IO.File]::WriteAllText($f, $c); " ^
-  "    Write-Host 'Patched BUILD.gn: added not_needed for sys_lib_flags'; " ^
-  "  } else { Write-Host 'BUILD.gn: sys_lib_flags patch not needed or already applied' } " ^
-  "} else { Write-Host 'WARNING: BUILD.gn not found at expected path' }"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0patch-sys-lib-flags.ps1" "%SOURCE_DIR%"
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
 ECHO gn gen BINARY_DIR (reading args from args.gn)
