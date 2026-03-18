@@ -99,7 +99,12 @@ REM in nix.gni because GN's rebase_path() can't handle Windows drive letters
 REM (produces broken paths like ..\..\..\C:\PROGRA~1\LLVM\bin\clang-cl.exe).
 REM Instead, copy system clang binaries over the downloaded bundled ones.
 ECHO Replacing bundled clang with system clang
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0replace-bundled-clang.ps1" "%SOURCE_DIR%"
+ECHO Script path: %~dp0replace-bundled-clang.ps1
+IF NOT EXIST "%~dp0replace-bundled-clang.ps1" (
+  ECHO ERROR: replace-bundled-clang.ps1 not found at %~dp0
+  GOTO ERROR
+)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& { try { & '%~dp0replace-bundled-clang.ps1' '%SOURCE_DIR%' } catch { Write-Host \"ERROR: $_\"; exit 1 } }"
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
 REM Patch build/toolchain/win/BUILD.gn to fix "sys_lib_flags" unused invoker error.
