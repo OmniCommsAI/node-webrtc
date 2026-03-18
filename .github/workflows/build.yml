@@ -235,23 +235,41 @@ jobs:
       # Windows runners come with MSVC pre-installed.
       # depot_tools' vs_toolchain.py finds it via DEPOT_TOOLS_WIN_TOOLCHAIN=0.
       - name: Install build dependencies
-        run: choco install ninja cmake --no-progress -y
+        run: choco install ninja cmake llvm --no-progress -y
 
       - name: Install npm dependencies
         run: npm install --ignore-scripts
 
-      # Windows uses MSVC, not clang from GN's perspective for linking.
-      # is_clang=true tells GN to download and use its own clang-cl for compilation
-      # while still using MSVC linker. treat_warnings_as_errors=false prevents
-      # M98-era code from failing with newer toolchains.
+      # Detect system LLVM install path. The bundled M98-era clang (v14) is
+      # rejected by MSVC 14.44+ STL headers which require Clang 19+.
+      # Using system clang-cl (same approach as linux-arm64 and darwin-arm64).
+      - name: Detect system clang path
+        run: |
+          $llvmDir = "C:\Program Files\LLVM"
+          if (-not (Test-Path "$llvmDir\bin\clang-cl.exe")) {
+            Write-Host "ERROR: clang-cl.exe not found at $llvmDir"
+            exit 1
+          }
+          $ver = & "$llvmDir\bin\clang-cl.exe" --version 2>&1 | Select-String 'clang version'
+          Write-Host "Using system clang: $ver"
+          echo "CLANG_BASE_PATH=$llvmDir" >> $env:GITHUB_ENV
+
+      # is_clang=true with clang_base_path tells GN to use system clang-cl
+      # instead of downloading the bundled M98-era clang (v14).
+      # treat_warnings_as_errors=false prevents M98 code from failing
+      # with newer compiler diagnostics.
       - name: Create nix.gni
         run: |
+          $clangPath = $env:CLANG_BASE_PATH -replace '\\', '/'
           @"
           is_clang=true
           use_lld=false
           clang_use_chrome_plugins=false
           treat_warnings_as_errors=false
+          clang_base_path="$clangPath"
           "@ | Out-File -FilePath nix.gni -Encoding utf8NoBOM
+          Write-Host "nix.gni contents:"
+          Get-Content nix.gni
 
       - name: Build
         env:
