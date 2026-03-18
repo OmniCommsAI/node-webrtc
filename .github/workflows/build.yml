@@ -252,7 +252,10 @@ jobs:
           }
           $ver = & "$llvmDir\bin\clang-cl.exe" --version 2>&1 | Select-String 'clang version'
           Write-Host "Using system clang: $ver"
-          echo "CLANG_BASE_PATH=$llvmDir" >> $env:GITHUB_ENV
+          # Use 8.3 short path to avoid spaces — the args.gn writer splits on ALL spaces
+          $shortPath = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($llvmDir).ShortPath
+          Write-Host "Short path: $shortPath"
+          echo "CLANG_BASE_PATH=$shortPath" >> $env:GITHUB_ENV
 
       # is_clang=true with clang_base_path tells GN to use system clang-cl
       # instead of downloading the bundled M98-era clang (v14).
