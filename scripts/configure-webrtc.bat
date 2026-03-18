@@ -93,11 +93,16 @@ powershell -NoProfile -Command ^
   "}"
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
-REM Patch build/toolchain/win/BUILD.gn to fix "sys_lib_flags" unused variable error.
-REM The M98-era code sets sys_lib_flags in the win_toolchains template but only uses
-REM it in certain scopes. GN treats unused assignments as hard errors.
-REM Fix: insert not_needed(["sys_lib_flags"]) after the assignment so GN knows
-REM the variable is intentionally set but not always consumed.
+REM Replace bundled M98-era clang (v14) with system clang (v19+).
+REM MSVC 14.44+ STL headers require Clang 19+. We can't use clang_base_path
+REM in nix.gni because GN's rebase_path() can't handle Windows drive letters
+REM (produces broken paths like ..\..\..\C:\PROGRA~1\LLVM\bin\clang-cl.exe).
+REM Instead, copy system clang binaries over the downloaded bundled ones.
+ECHO Replacing bundled clang with system clang
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0replace-bundled-clang.ps1" "%SOURCE_DIR%"
+IF %ERRORLEVEL% NEQ 0 GOTO ERROR
+
+REM Patch build/toolchain/win/BUILD.gn to fix "sys_lib_flags" unused invoker error.
 ECHO Patching BUILD.gn to suppress unused sys_lib_flags error
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0patch-sys-lib-flags.ps1" "%SOURCE_DIR%"
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
