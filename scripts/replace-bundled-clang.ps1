@@ -6,7 +6,13 @@
 # binaries over the bundled ones so GN's default path resolution works.
 param([string]$SourceDir)
 
+$ErrorActionPreference = 'Continue'
+
+Write-Host "SourceDir: $SourceDir"
+
 $systemLlvm = "C:\Program Files\LLVM"
+Write-Host "Checking system LLVM at: $systemLlvm"
+Write-Host "LLVM exists: $(Test-Path $systemLlvm)"
 $bundledBase = Join-Path $SourceDir "third_party\llvm-build\Release+Asserts"
 $bundledBin = Join-Path $bundledBase "bin"
 
