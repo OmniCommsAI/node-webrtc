@@ -1,5 +1,14 @@
-# Diagnostic: dump BUILD.gn structure around sys_lib_flags so we can understand
-# the scope issue and craft the correct fix.
+# Patch build/toolchain/win/BUILD.gn to fix "sys_lib_flags" unused invoker error.
+#
+# Problem: The msvc_toolchain template has a condition at line 145:
+#   if (host_os != "win" || (use_lld && defined(invoker.sys_lib_flags)))
+# When use_lld=false (our config), the condition short-circuits and never reads
+# invoker.sys_lib_flags. GN treats unread invoker variables as hard errors.
+#
+# Fix: Remove the use_lld guard. The defined() check alone is correct —
+# if the invoker provides sys_lib_flags, it should always be used.
+# This also fixes a latent bug: clang lib paths were being silently dropped
+# from the linker when use_lld=false.
 param([string]$SourceDir)
 
 $f = Join-Path $SourceDir 'build\toolchain\win\BUILD.gn'
@@ -8,42 +17,27 @@ if (-not (Test-Path $f)) {
     exit 0
 }
 
-$lines = [IO.File]::ReadAllLines($f)
-Write-Host "=== BUILD.gn has $($lines.Count) lines ==="
+$c = [IO.File]::ReadAllText($f)
 
-# Find all lines referencing sys_lib_flags and print context
-for ($i = 0; $i -lt $lines.Count; $i++) {
-    if ($lines[$i] -match 'sys_lib_flags') {
-        $start = [Math]::Max(0, $i - 5)
-        $end = [Math]::Min($lines.Count - 1, $i + 5)
-        Write-Host ""
-        Write-Host "--- sys_lib_flags at line $($i + 1) ---"
-        for ($j = $start; $j -le $end; $j++) {
-            $marker = if ($j -eq $i) { ">>>" } else { "   " }
-            Write-Host "$marker $($j + 1): $($lines[$j])"
+# Original:  if (host_os != "win" || (use_lld && defined(invoker.sys_lib_flags))) {
+# Patched:   if (host_os != "win" || defined(invoker.sys_lib_flags)) {
+$old = 'host_os != "win" || (use_lld && defined(invoker.sys_lib_flags))'
+$new = 'host_os != "win" || defined(invoker.sys_lib_flags)'
+
+if ($c -match [regex]::Escape($old)) {
+    $c = $c.Replace($old, $new)
+    [IO.File]::WriteAllText($f, $c)
+    Write-Host "Patched BUILD.gn: removed use_lld guard from sys_lib_flags condition"
+} elseif ($c -match [regex]::Escape($new)) {
+    Write-Host "BUILD.gn: sys_lib_flags condition already patched"
+} else {
+    Write-Host "WARNING: expected sys_lib_flags condition not found in BUILD.gn"
+    # Dump lines with sys_lib_flags for debugging
+    $lines = [IO.File]::ReadAllLines($f)
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match 'sys_lib_flags') {
+            Write-Host "  $($i + 1): $($lines[$i].Trim())"
         }
     }
+    exit 1
 }
-
-# Also dump lines 520-545 (the area GN complains about)
-Write-Host ""
-Write-Host "=== Lines 510-550 (error region) ==="
-$start = [Math]::Min(509, $lines.Count - 1)
-$end = [Math]::Min(549, $lines.Count - 1)
-for ($j = $start; $j -le $end; $j++) {
-    Write-Host "   $($j + 1): $($lines[$j])"
-}
-
-Write-Host ""
-Write-Host "=== Lines 340-365 (usage region) ==="
-$start = [Math]::Min(339, $lines.Count - 1)
-$end = [Math]::Min(364, $lines.Count - 1)
-for ($j = $start; $j -le $end; $j++) {
-    Write-Host "   $($j + 1): $($lines[$j])"
-}
-
-# Don't modify the file — just dump info. Exit 0 so configure continues
-# and shows the original GN error for comparison.
-Write-Host ""
-Write-Host "=== No patch applied (diagnostic mode) ==="
-exit 0
