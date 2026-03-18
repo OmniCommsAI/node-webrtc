@@ -7,10 +7,11 @@
 param([string]$SourceDir)
 
 $systemLlvm = "C:\Program Files\LLVM"
-$bundledDir = Join-Path $SourceDir "third_party\llvm-build\Release+Asserts\bin"
+$bundledBase = Join-Path $SourceDir "third_party\llvm-build\Release+Asserts"
+$bundledBin = Join-Path $bundledBase "bin"
 
-if (-not (Test-Path $bundledDir)) {
-    Write-Host "WARNING: Bundled clang dir not found at $bundledDir"
+if (-not (Test-Path $bundledBin)) {
+    Write-Host "WARNING: Bundled clang dir not found at $bundledBin"
     exit 0
 }
 
@@ -20,67 +21,86 @@ if (-not (Test-Path "$systemLlvm\bin\clang-cl.exe")) {
 }
 
 # Show versions
-$bundledVer = & "$bundledDir\clang-cl.exe" --version 2>&1 | Select-String 'clang version'
+$bundledVer = & "$bundledBin\clang-cl.exe" --version 2>&1 | Select-String 'clang version'
 $systemVer = & "$systemLlvm\bin\clang-cl.exe" --version 2>&1 | Select-String 'clang version'
 Write-Host "Bundled clang: $bundledVer"
 Write-Host "System clang:  $systemVer"
 
-# Copy key binaries from system LLVM over bundled ones
-$binaries = @("clang-cl.exe", "clang.exe", "clang++.exe", "clang-cpp.exe", "lld-link.exe", "llvm-lib.exe")
-foreach ($bin in $binaries) {
-    $src = Join-Path "$systemLlvm\bin" $bin
-    $dst = Join-Path $bundledDir $bin
-    if (Test-Path $src) {
-        Copy-Item $src $dst -Force
-        Write-Host "Replaced: $bin"
-    }
+# Copy ALL exe and dll files from system LLVM bin to bundled bin
+Write-Host "Copying system LLVM binaries..."
+Get-ChildItem "$systemLlvm\bin\*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
+    Copy-Item $_.FullName (Join-Path $bundledBin $_.Name) -Force
 }
-
-# Also copy any clang DLLs that might be needed
 Get-ChildItem "$systemLlvm\bin\*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
-    Copy-Item $_.FullName (Join-Path $bundledDir $_.Name) -Force
+    Copy-Item $_.FullName (Join-Path $bundledBin $_.Name) -Force
 }
+Write-Host "Copied binaries from $systemLlvm\bin"
 
 # Copy the clang resource directory (compiler builtins, sanitizer runtimes)
-# GN expects it at third_party/llvm-build/Release+Asserts/lib/clang/<version>/
-$systemClangVer = & "$systemLlvm\bin\clang-cl.exe" -dumpversion 2>&1
-$systemClangVer = $systemClangVer.Trim()
-$systemResDir = Join-Path $systemLlvm "lib\clang\$systemClangVer"
-$bundledLibDir = Join-Path $SourceDir "third_party\llvm-build\Release+Asserts\lib\clang"
+# GN generates -libpath:lib/clang/<version>/lib/windows in ninja files
+# LLVM 16+ uses major-version-only dirs: lib/clang/20/ (not lib/clang/20.1.8/)
+$bundledLibClang = Join-Path $bundledBase "lib\clang"
 
-if (Test-Path $systemResDir) {
-    # Find the old bundled version directory name (e.g., "14.0.0")
-    # GN's generated ninja files reference this path for -libpath
-    $oldVersionDirs = Get-ChildItem $bundledLibDir -Directory -ErrorAction SilentlyContinue
-    $oldVersion = if ($oldVersionDirs) { $oldVersionDirs[0].Name } else { $null }
+# Find the OLD bundled version dir name (e.g., "14.0.0")
+$oldVersionDir = Get-ChildItem $bundledLibClang -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+$oldVersion = if ($oldVersionDir) { $oldVersionDir.Name } else { $null }
+Write-Host "Old bundled resource dir: $oldVersion"
 
-    # Remove old bundled clang resource dirs
-    foreach ($d in $oldVersionDirs) {
-        Remove-Item $d.FullName -Recurse -Force
-        Write-Host "Removed old resource dir: $($d.Name)"
+# Find the SYSTEM resource dir (could be major-only like "20" or full like "20.1.8")
+$systemLibClang = Join-Path $systemLlvm "lib\clang"
+$systemResDir = $null
+if (Test-Path $systemLibClang) {
+    $systemResDir = Get-ChildItem $systemLibClang -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+}
+
+if ($systemResDir) {
+    Write-Host "System resource dir: $($systemResDir.Name) at $($systemResDir.FullName)"
+
+    # Remove old bundled dirs
+    Get-ChildItem $bundledLibClang -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        Remove-Item $_.FullName -Recurse -Force
+        Write-Host "Removed: $($_.Name)"
     }
 
-    # Copy system clang resource dir under the NEW version name
-    Copy-Item $systemResDir $bundledLibDir -Recurse -Force
-    Write-Host "Copied clang resource dir: $systemClangVer"
+    # Copy system resource dir
+    Copy-Item $systemResDir.FullName (Join-Path $bundledLibClang $systemResDir.Name) -Recurse -Force
+    Write-Host "Copied resource dir: $($systemResDir.Name)"
 
-    # Also create a copy under the OLD version name so GN's generated
+    # Create junction from old version name to new so GN's generated
     # -libpath:lib/clang/14.0.0/lib/windows still resolves
-    if ($oldVersion -and $oldVersion -ne $systemClangVer) {
-        $oldPath = Join-Path $bundledLibDir $oldVersion
-        $newPath = Join-Path $bundledLibDir $systemClangVer
-        # Use directory junction (symlink) to avoid duplicating files
-        cmd /c "mklink /J `"$oldPath`" `"$newPath`"" 2>&1 | Out-Null
-        if (Test-Path $oldPath) {
-            Write-Host "Created junction: $oldVersion -> $systemClangVer"
+    if ($oldVersion -and $oldVersion -ne $systemResDir.Name) {
+        $junctionTarget = Join-Path $bundledLibClang $systemResDir.Name
+        $junctionPath = Join-Path $bundledLibClang $oldVersion
+        cmd /c "mklink /J `"$junctionPath`" `"$junctionTarget`"" 2>&1 | Out-Null
+        if (Test-Path $junctionPath) {
+            Write-Host "Created junction: $oldVersion -> $($systemResDir.Name)"
         } else {
-            # Fallback: copy if junction fails
-            Copy-Item $newPath $oldPath -Recurse -Force
-            Write-Host "Copied resource dir as: $oldVersion (junction failed)"
+            Copy-Item $junctionTarget $junctionPath -Recurse -Force
+            Write-Host "Copied as fallback: $oldVersion"
         }
+    }
+} else {
+    Write-Host "WARNING: System clang resource dir not found at $systemLibClang"
+    # List what's actually there
+    if (Test-Path $systemLibClang) {
+        Get-ChildItem $systemLibClang | ForEach-Object { Write-Host "  Found: $($_.Name)" }
     }
 }
 
 # Verify
-$newVer = & "$bundledDir\clang-cl.exe" --version 2>&1 | Select-String 'clang version'
+$newVer = & "$bundledBin\clang-cl.exe" --version 2>&1 | Select-String 'clang version'
 Write-Host "Bundled clang after replacement: $newVer"
+
+# Verify resource dir exists for old version path
+if ($oldVersion) {
+    $checkPath = Join-Path $bundledLibClang "$oldVersion\lib\windows"
+    if (Test-Path $checkPath) {
+        Write-Host "Verified: $oldVersion\lib\windows exists"
+    } else {
+        Write-Host "WARNING: $oldVersion\lib\windows NOT found — linker may fail"
+        # List what we have
+        Get-ChildItem $bundledLibClang -Recurse -Depth 3 | ForEach-Object {
+            Write-Host "  $($_.FullName.Replace($bundledLibClang, ''))"
+        }
+    }
+}
