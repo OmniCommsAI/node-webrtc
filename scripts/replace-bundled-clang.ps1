@@ -49,14 +49,36 @@ $systemResDir = Join-Path $systemLlvm "lib\clang\$systemClangVer"
 $bundledLibDir = Join-Path $SourceDir "third_party\llvm-build\Release+Asserts\lib\clang"
 
 if (Test-Path $systemResDir) {
+    # Find the old bundled version directory name (e.g., "14.0.0")
+    # GN's generated ninja files reference this path for -libpath
+    $oldVersionDirs = Get-ChildItem $bundledLibDir -Directory -ErrorAction SilentlyContinue
+    $oldVersion = if ($oldVersionDirs) { $oldVersionDirs[0].Name } else { $null }
+
     # Remove old bundled clang resource dirs
-    Get-ChildItem $bundledLibDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-        Remove-Item $_.FullName -Recurse -Force
-        Write-Host "Removed old resource dir: $($_.Name)"
+    foreach ($d in $oldVersionDirs) {
+        Remove-Item $d.FullName -Recurse -Force
+        Write-Host "Removed old resource dir: $($d.Name)"
     }
-    # Copy system clang resource dir
+
+    # Copy system clang resource dir under the NEW version name
     Copy-Item $systemResDir $bundledLibDir -Recurse -Force
     Write-Host "Copied clang resource dir: $systemClangVer"
+
+    # Also create a copy under the OLD version name so GN's generated
+    # -libpath:lib/clang/14.0.0/lib/windows still resolves
+    if ($oldVersion -and $oldVersion -ne $systemClangVer) {
+        $oldPath = Join-Path $bundledLibDir $oldVersion
+        $newPath = Join-Path $bundledLibDir $systemClangVer
+        # Use directory junction (symlink) to avoid duplicating files
+        cmd /c "mklink /J `"$oldPath`" `"$newPath`"" 2>&1 | Out-Null
+        if (Test-Path $oldPath) {
+            Write-Host "Created junction: $oldVersion -> $systemClangVer"
+        } else {
+            # Fallback: copy if junction fails
+            Copy-Item $newPath $oldPath -Recurse -Force
+            Write-Host "Copied resource dir as: $oldVersion (junction failed)"
+        }
+    }
 }
 
 # Verify
