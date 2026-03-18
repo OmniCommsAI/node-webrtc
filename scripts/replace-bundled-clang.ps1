@@ -103,10 +103,10 @@ if ($oldVersion) {
     if (Test-Path $checkPath) {
         Write-Host "Verified: $oldVersion\lib\windows exists"
     } else {
-        Write-Host "WARNING: $oldVersion\lib\windows NOT found — linker may fail"
+        Write-Host "WARNING: $oldVersion\lib\windows NOT found - linker may fail"
         # List what we have
-        Get-ChildItem $bundledLibClang -Recurse -Depth 3 | ForEach-Object {
-            Write-Host "  $($_.FullName.Replace($bundledLibClang, ''))"
+        Get-ChildItem $bundledLibClang -Recurse -Depth 3 -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "  $($_.FullName)"
         }
     }
 }
