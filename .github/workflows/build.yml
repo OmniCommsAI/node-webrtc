@@ -251,6 +251,7 @@ jobs:
           use_lld=false
           clang_use_chrome_plugins=false
           treat_warnings_as_errors=false
+          extra_cflags="-Wno-deprecated-builtins -Wno-deprecated-declarations -Wno-unknown-warning-option"
           "@ | Out-File -FilePath nix.gni -Encoding utf8NoBOM
 
       - name: Build
