@@ -112,6 +112,13 @@ ECHO Patching BUILD.gn to suppress unused sys_lib_flags error
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0patch-sys-lib-flags.ps1" "%SOURCE_DIR%"
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
+REM Patch abseil-cpp type_traits.h for Clang 20 compatibility.
+REM Deprecated builtins return different values than std:: equivalents,
+REM causing compliance static_asserts to fail.
+ECHO Patching abseil-cpp for Clang 20 compatibility
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& { try { & '%~dp0patch-abseil-builtins.ps1' '%SOURCE_DIR%' } catch { Write-Host \"ERROR: $_\"; exit 1 } }"
+IF %ERRORLEVEL% NEQ 0 GOTO ERROR
+
 ECHO gn gen BINARY_DIR (reading args from args.gn)
 CALL gn gen %BINARY_DIR%
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
