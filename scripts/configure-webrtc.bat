@@ -119,6 +119,11 @@ ECHO Patching abseil-cpp for Clang 20 compatibility
 powershell -NoProfile -ExecutionPolicy Bypass -Command "& { try { & '%~dp0patch-abseil-builtins.ps1' '%SOURCE_DIR%' } catch { Write-Host \"ERROR: $_\"; exit 1 } }"
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
+REM Suppress Clang 20 warnings that M98 code triggers as errors.
+ECHO Patching compiler warnings config
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& { try { & '%~dp0patch-compiler-warnings.ps1' '%SOURCE_DIR%' } catch { Write-Host \"ERROR: $_\"; exit 1 } }"
+IF %ERRORLEVEL% NEQ 0 GOTO ERROR
+
 ECHO gn gen BINARY_DIR (reading args from args.gn)
 CALL gn gen %BINARY_DIR%
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
