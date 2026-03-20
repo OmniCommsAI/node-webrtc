@@ -112,6 +112,13 @@ ECHO Patching BUILD.gn to suppress unused sys_lib_flags error
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0patch-sys-lib-flags.ps1" "%SOURCE_DIR%"
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
+REM Append extra_cflags to args.gn to suppress Clang 20 warnings on M98 code.
+REM Must be appended here (not in nix.gni) because the args.gn writer splits
+REM on spaces, which breaks quoted strings with multiple flags.
+ECHO Appending extra_cflags to args.gn
+ECHO extra_cflags="-Wno-deprecated-builtins -Wno-deprecated-declarations -Wno-unknown-warning-option">> %BINARY_DIR%\args.gn
+IF %ERRORLEVEL% NEQ 0 GOTO ERROR
+
 ECHO gn gen BINARY_DIR (reading args from args.gn)
 CALL gn gen %BINARY_DIR%
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
