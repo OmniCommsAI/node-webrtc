@@ -18,6 +18,10 @@ if (platform === "win32") {
   // libwebrtc compiled by MSVC/clang-cl (dllexport, calling conventions).
   // vcvarsall.bat must be run before this script to put cl.exe on PATH.
   args.push("--CDCMAKE_C_COMPILER=cl", "--CDCMAKE_CXX_COMPILER=cl");
+  // Explicitly set RC compiler to Windows rc.exe. Without this, CMake
+  // finds node_modules/.bin/rc (npm config package) instead of the
+  // Windows Resource Compiler.
+  args.push("--CDCMAKE_RC_COMPILER=rc");
 }
 
 if (arch !== os.arch()) {
