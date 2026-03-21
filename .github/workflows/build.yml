@@ -271,7 +271,11 @@ jobs:
         run: npm run build
 
       - name: Copy to prebuilds
-        run: Copy-Item build-win32-x64\Release\wrtc.node prebuilds\win32-x64\wrtc.node
+        run: |
+          # Ninja (single-config) outputs to build dir directly, not Release/
+          $src = if (Test-Path "build-win32-x64\Release\wrtc.node") { "build-win32-x64\Release\wrtc.node" } else { "build-win32-x64\wrtc.node" }
+          Write-Host "Copying from: $src"
+          Copy-Item $src prebuilds\win32-x64\wrtc.node
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
