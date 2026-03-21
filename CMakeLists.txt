@@ -361,6 +361,7 @@ if(WIN32)
     winmm.lib
     wmcodecdspuuid.lib
     ws2_32.lib
+    delayimp.lib
   )
 
   target_compile_definitions(${MODULE} PRIVATE
