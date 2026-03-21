@@ -163,29 +163,29 @@ Napi::Value MediaStreamTrack::GetSettings(const Napi::CallbackInfo &info) {
   // FIXME(jack): find some way to get the real settings.
   if (_track->kind() == _track->kAudioKind) {
     auto settings = AudioMediaTrackSettings{
-        .deviceId = "FakeAudioDevice",
-        .groupId = "FakeDeviceGroup",
-        .autoGainControl = false,
-        .echoCancellation = false,
-        .noiseSuppression = false,
-        .channelCount = 1,
-        .sampleRate = 48000,
-        .sampleSize = 16,
-        .latency = 0.0,
-        .volume = 0.25,
+        "FakeAudioDevice",  // deviceId
+        "FakeDeviceGroup",  // groupId
+        false,              // autoGainControl
+        false,              // echoCancellation
+        false,              // noiseSuppression
+        1,                  // channelCount
+        48000,              // sampleRate
+        16,                 // sampleSize
+        0.0,                // latency
+        0.25,               // volume
     };
     CONVERT_OR_THROW_AND_RETURN_NAPI(info.Env(), settings, result, Napi::Value)
     return result;
   }
   assert(_track->kind() == _track->kVideoKind);
   auto settings = VideoMediaTrackSettings{
-      .deviceId = "FakeVideoDevice",
-      .groupId = "FakeDeviceGroup",
-      .height = 480,
-      .width = 640,
-      .aspectRatio = 640.0 / 480.0,
-      .frameRate = 30.0,
-      .facingMode = "user",
+      "FakeVideoDevice",  // deviceId
+      "FakeDeviceGroup",  // groupId
+      480,                // height
+      640,                // width
+      640.0 / 480.0,      // aspectRatio
+      30.0,               // frameRate
+      "user",             // facingMode
   };
   CONVERT_OR_THROW_AND_RETURN_NAPI(info.Env(), settings, result, Napi::Value)
   return result;
