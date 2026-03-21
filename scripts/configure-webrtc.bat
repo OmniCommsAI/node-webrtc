@@ -123,10 +123,9 @@ ECHO gn gen BINARY_DIR (reading args from args.gn)
 CALL gn gen %BINARY_DIR%
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
-REM Patch generated ninja files to suppress Clang 20 warnings.
-REM Must run AFTER gn gen since we patch the generated ninja files directly.
-ECHO Patching ninja files with warning suppressions
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& { try { & '%~dp0patch-compiler-warnings.ps1' '%BINARY_DIR%' } catch { Write-Host \"ERROR: $_\"; exit 1 } }"
+REM Create clang-cl.cfg to suppress Clang 20 warnings in M98 code.
+ECHO Creating clang-cl.cfg for warning suppressions
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& { try { & '%~dp0patch-compiler-warnings.ps1' '%SOURCE_DIR%' } catch { Write-Host \"ERROR: $_\"; exit 1 } }"
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
 GOTO DONE
