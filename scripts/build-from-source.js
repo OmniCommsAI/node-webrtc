@@ -13,11 +13,11 @@ if (process.env.DEBUG) {
 }
 
 if (platform === "win32") {
-  // Use Visual Studio generator so CMake auto-detects MSVC compiler.
-  // Ninja generator picks up MinGW c++.exe from PATH, but libwebrtc
-  // is compiled with MSVC/clang-cl, so the wrapper must also use MSVC
-  // for ABI compatibility (dllexport, calling conventions, etc).
-  args.push(...["-G", "Visual Studio 17 2022"]);
+  args.push(...["-G", "Ninja"]);
+  // Force MSVC compiler. MinGW c++.exe on PATH is incompatible with
+  // libwebrtc compiled by MSVC/clang-cl (dllexport, calling conventions).
+  // vcvarsall.bat must be run before this script to put cl.exe on PATH.
+  args.push("--CDCMAKE_C_COMPILER=cl", "--CDCMAKE_CXX_COMPILER=cl");
 }
 
 if (arch !== os.arch()) {

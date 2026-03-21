@@ -253,6 +253,15 @@ jobs:
           treat_warnings_as_errors=false
           "@ | Out-File -FilePath nix.gni -Encoding utf8NoBOM
 
+      # Set up MSVC developer environment so cl.exe is on PATH.
+      # cmake-js uses Ninja generator which needs explicit compiler paths.
+      # Without this, Ninja picks up MinGW c++.exe which is ABI-incompatible
+      # with libwebrtc compiled by MSVC/clang-cl.
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Build
         env:
           TARGET_ARCH: x64
